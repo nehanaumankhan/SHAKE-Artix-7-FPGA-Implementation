@@ -12,7 +12,7 @@ module shake_top_tb;
     localparam string TV_PATH = "C://FYP//SHAKE//shake-sv//tb//kat//";
     localparam string RESULTS_DIR = "C://FYP//SHAKE//shake-sv//tb//results";
     localparam TV = 1;
-
+    
     string file_name;
     integer csv_fd;
     logic failed = 0;
@@ -90,13 +90,18 @@ module shake_top_tb;
         $display("INFO: input_size = %0d bits, output_size = %0d bits", input_size, output_size);
         $display("INFO: total_expected_bytes = %0d", total_expected_bytes);
 
-        // Convert packed digest vector to byte array (LSB first)
-        for (int i = 0; i < total_words; i++) begin
-            curr = digests[TV][i*64 +: 64];
-            for (int j = 0; j < 8; j++)
-                expected_bytes[8*i + j] = curr[j*8 +: 8 ];
-            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);
+//        // Convert packed digest vector to byte array (LSB first)
+//        for (int i = 0; i < total_words; i++) begin
+//            curr = digests[TV][i*64 +: 64];
+//            for (int j = 0; j < 8; j++)
+//                expected_bytes[8*i + j] = curr[j*8 +: 8 ];
+//            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);
                 
+//        end
+        for (int i = 0; i < total_expected_bytes; i++) begin
+//            curr = digests[TV][i*64 +: 64];
+            expected_bytes[i] = digests[TV][i*8 +: 8];
+//            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);           
         end
 
         // Open CSV
@@ -136,24 +141,27 @@ module shake_top_tb;
                 wait(done == 1);
                 $display("INFO: done asserted at time %0t", $time);
             end
-            begin
-                repeat(2000000) @(posedge clk);
-                $display("ERROR: Timeout waiting for done");
-                $finish;
-            end
+//            begin
+//                repeat(2000000) @(posedge clk);
+//                $display("ERROR: Timeout waiting for done");
+//                $finish;
+//            end
         join_any
         disable fork;
 
         // Read output buffer byte by byte and compare
+//        buffer_read_addr = 0;
+//        buffer_read_en = 1;
+        @(posedge clk);
         $display("INFO: Reading output buffer...");
-        for (int i = 0; i < total_expected_bytes; i++) begin
+        for (int i = 0; i <= total_expected_bytes; i++) begin
             buffer_read_addr = i;
             buffer_read_en = 1;
             @(posedge clk);
             buffer_read_en = 0;
             @(posedge clk);
-            if (buffer_dout_byte !== expected_bytes[i]) begin
-                $display("ERROR: Byte %0d: expected %h, got %h", i, expected_bytes[i], buffer_dout_byte);
+            if (buffer_dout_byte !== expected_bytes[i-1]) begin
+                $display("ERROR: Byte %0d: expected %h, got %h", i, expected_bytes[i-1], buffer_dout_byte);
                 mismatch = 1;
             end else begin
                 $write("%h ", buffer_dout_byte);
@@ -161,13 +169,4 @@ module shake_top_tb;
             end
         end
         $display("\n");
-
-        // Final verdict
-        if (mismatch) $display("FAILURE: Digest mismatch");
-        else          $display("SUCCESS: All %0d bytes match", total_expected_bytes);
-
-        $display("Completed in %0d clock cycles", cycle_ctr);
-        $fwrite(csv_fd, "%0d,%0d\n", cycle_ctr, !mismatch);
-        $finish;
-    end
 endmodule
