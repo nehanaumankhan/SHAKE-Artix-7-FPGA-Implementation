@@ -22,7 +22,7 @@ module output_buffer #(
     localparam DEPTH_BYTES = DEPTH_WORDS * BYTES_PER_WORD;
 
     logic [DATA_WIDTH-1:0] mem [0:DEPTH_WORDS-1];
-    logic [$clog2(DEPTH_WORDS * (DATA_WIDTH/BYTE_WIDTH))-1:0] hold;
+//    logic [$clog2(DEPTH_WORDS * (DATA_WIDTH/BYTE_WIDTH))-1:0] hold;
     logic [DATA_WIDTH-1:0] read_word;
     logic [$clog2(DEPTH_WORDS)-1:0] word_addr;
     logic [2:0] byte_offset;   // assuming 8 bytes per word, so 3 bits offset (0..7)
@@ -48,15 +48,23 @@ module output_buffer #(
 //    assign byte_offset = raddr[$clog2(BYTES_PER_WORD)-1:0];
 //    assign read_word = mem[word_addr];
 
+//    always_ff @(posedge clk) begin
+//        if (re) begin
+//            read_word <= mem[word_addr];
+//            word_addr <= raddr >> $clog2(BYTES_PER_WORD);
+//            hold <= raddr;
+//        end
+//        byte_offset <= hold[$clog2(BYTES_PER_WORD)-1:0];
+//        // Output the requested byte (LSB first)
+//        dout <= read_word[byte_offset*BYTE_WIDTH +: BYTE_WIDTH];
+//    end
     always_ff @(posedge clk) begin
         if (re) begin
-            read_word <= mem[word_addr];
-            word_addr <= raddr >> $clog2(BYTES_PER_WORD);
-            hold <= raddr;
-        end
-        byte_offset <= hold[$clog2(BYTES_PER_WORD)-1:0];
-        // Output the requested byte (LSB first)
-        dout <= read_word[byte_offset*BYTE_WIDTH +: BYTE_WIDTH];
+            word_addr = raddr >> $clog2(BYTES_PER_WORD);
+            byte_offset = raddr[$clog2(BYTES_PER_WORD)-1:0];
+            read_word = mem[word_addr];
+            dout <= read_word[byte_offset*BYTE_WIDTH +: BYTE_WIDTH];
+        end   
     end
 
 endmodule
