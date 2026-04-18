@@ -16,8 +16,8 @@ module tb_top_debug();
     localparam BRAM_DEPTH = 1024;
     localparam OUTPUT_BUFFER_DEPTH_WORDS = 131072;  // must match shake_top parameter
 
-    localparam string TV_PATH = "C://Users//LENOVO//SHAKE_NEHA//SHAKE_FYP//shake-sv//tb//kat//";
-    localparam string RESULTS_DIR = "C://Users//LENOVO//SHAKE_NEHA//SHAKE_FYP//shake-sv//tb//results";
+    localparam string TV_PATH = "C://FYP//SHAKE//shake-sv//tb//kat//";
+    localparam string RESULTS_DIR = "C://FYP//SHAKE//shake-sv//tb//results";
     localparam TV = 0;
 
     string file_name;
