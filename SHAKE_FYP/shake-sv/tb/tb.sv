@@ -98,9 +98,11 @@ module shake_top_tb;
 //            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);
                 
 //        end
-        for (int i = 0; i < total_expected_bytes; i++) begin
+        for (int i =  0; i < total_expected_bytes; i++) begin
 //            curr = digests[TV][i*64 +: 64];
-            expected_bytes[i] = digests[TV][i*8 +: 8];
+            expected_bytes[i] = digests[TV][MAX_DIGEST_SIZE - total_expected_bytes*8 + i*8 +: 8];
+//            $display("%h", digests[TV][i*8 +: 8]);
+            
 //            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);           
         end
 
@@ -154,19 +156,28 @@ module shake_top_tb;
 //        buffer_read_en = 1;
         @(posedge clk);
         $display("INFO: Reading output buffer...");
-        for (int i = 0; i <= total_expected_bytes; i++) begin
+        for (int i = 0; i < total_expected_bytes; i++) begin
             buffer_read_addr = i;
             buffer_read_en = 1;
             @(posedge clk);
-            buffer_read_en = 0;
-            @(posedge clk);
-            if (buffer_dout_byte !== expected_bytes[i-1]) begin
-                $display("ERROR: Byte %0d: expected %h, got %h", i, expected_bytes[i-1], buffer_dout_byte);
+//            buffer_read_en = 0;
+//            @(posedge clk);
+            if (buffer_dout_byte !== expected_bytes[i]) begin
+                $display("ERROR: Byte %0d: expected %h, got %h", i, expected_bytes[i], buffer_dout_byte);
                 mismatch = 1;
             end else begin
                 $write("%h ", buffer_dout_byte);
                 if ((i+1) % 16 == 0) $write("\n");
             end
-        end
+        end 
         $display("\n");
+
+        // Final verdict
+        if (mismatch) $display("FAILURE: Digest mismatch");
+        else          $display("SUCCESS: All %0d bytes match", total_expected_bytes);
+
+        $display("Completed in %0d clock cycles", cycle_ctr);
+        $fwrite(csv_fd, "%0d,%0d\n", cycle_ctr, !mismatch);
+        $finish;
+    end
 endmodule
