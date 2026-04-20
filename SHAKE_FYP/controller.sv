@@ -6,8 +6,9 @@ module controller #(
 )(
     input  logic clk,
     input  logic rst,
-    input  logic start,
+//    input  logic start,
     output logic done,
+//    output logic [7:0] out_last,
 
     // BRAM interface
     output logic [BRAM_ADDR_WIDTH-1:0] bram_addr,
@@ -31,7 +32,7 @@ module controller #(
     output logic [31:0] buffer_addr,   // write address (0..total_output_words-1)
     output logic [WORD_WIDTH-1:0] buffer_din
 );
-
+    logic start = 0;
     // State encoding
     typedef enum logic [2:0] {
         IDLE,
@@ -96,7 +97,8 @@ module controller #(
     // State registers and outputs
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            $display("HERE!");
+//            $display("HERE!");
+//            out_last <= 0;
             state <= IDLE;
             bram_addr <= 0;
             bram_read_en <= 0;
@@ -116,19 +118,19 @@ module controller #(
             buffer_we <= 0;
             buffer_addr <= 0;
             buffer_din <= 0;
+            start <= 1;
         end else begin
             // Default assignments
             bram_read_en <= 0;
             valid_i <= 0;
             ready_o <= 0;
-            done <= 0;
+//            done <= 0;
             out_valid <= 0;
             buffer_we <= 0;
 
             case (state)
                 IDLE: begin
                     if (start) begin
-                    
                         bram_addr <= 0;
                         bram_read_en <= 1;
                         state <= READ_CONFIG;
@@ -141,6 +143,7 @@ module controller #(
 
                 READ_CONFIG: begin
                     state <= SEND_CONFIG;
+                    start <= 0;
                 end
 
                 SEND_CONFIG: begin
@@ -194,6 +197,7 @@ module controller #(
                         buffer_we <= 1;
                         buffer_addr <= output_words_rcvd;
                         buffer_din <= data_o;
+//                        out_last <= data_o[7:0];
 
                         output_words_rcvd <= output_words_rcvd + 1;
                         if (output_words_rcvd + 1 >= total_output_words) begin
