@@ -13,17 +13,18 @@ module tb_top_debug();
     localparam MAX_TV_SIZE = 2;
     localparam MAX_DIGEST_SIZE = 8 * 1024 * 1024;
     localparam MAX_MESSAGE_SIZE = 8 * 1024 * 1024;
-    localparam BRAM_DEPTH = 1024;
-    localparam OUTPUT_BUFFER_DEPTH_WORDS = 131072;  // must match shake_top parameter
+    localparam BRAM_DEPTH = 256;
+    localparam OUTPUT_BUFFER_DEPTH_WORDS = 256;  // must match shake_top parameter
 
-    localparam string TV_PATH = "C://FYP//SHAKE//shake-sv//tb//kat//";
-    localparam string RESULTS_DIR = "C://FYP//SHAKE//shake-sv//tb//results";
+    localparam string TV_PATH = "C://Users//LENOVO//SHAKE-Artix-7-FPGA-Implementation//SHAKE_FYP//shake-sv//tb//kat//";
+    localparam string RESULTS_DIR = "C://Users//LENOVO//SHAKE-Artix-7-FPGA-Implementation//SHAKE_FYP//shake-sv//tb//results//";
     localparam TV = 0;
 
     string file_name;
     integer csv_fd;
     logic failed = 0;
     logic [63:0] curr;
+    logic [7:0] out_last;
 
     // Test vector arrays
     logic [w-1:0] config_words [0:MAX_TV_SIZE-1];
@@ -49,7 +50,6 @@ module tb_top_debug();
     ) dut (
         .clk(clk),
         .rst_n(rst_n),
-        .start(start),
         .tr_start(done),
         .tr_end(tr_end),
         .tx(tx)
@@ -92,71 +92,61 @@ module tb_top_debug();
         if (!csv_fd) $fatal(1, "Failed to open CSV file");
         $fwrite(csv_fd, "total_cycles,success\n");
 
-        // Initialize input buffer (hierarchical path)
-        $display("INFO: Initializing input buffer...");
-        for (int i = 0; i < BRAM_DEPTH; i++) dut.shake.bram_inst.mem[i] = '0;
-        dut.shake.bram_inst.mem[0] = config_words[TV];
-        for (int i = 0; i < (input_size + w - 1) / w; i++) begin
-            dut.shake.bram_inst.mem[1 + i] = messages[TV][i*w +: w];
-        end
-        $display("INFO: Input buffer initialized with config and %0d message words", (input_size + w - 1) / w);
-
-        // Reset and start
-        rst_n = 0;
-        start = 0;
-        mismatch = 0;
-
-        repeat(5) @(posedge clk);
-        rst_n = 1;
-        repeat(2) @(posedge clk);
-        $display("INFO: Asserting start pulse");
-        start = 1;
-        @(posedge clk);
-        start = 0;
-
-        // Wait for done with timeout
-        $display("INFO: Waiting for done...");
-        fork
-            begin
-                wait(done == 1);
-                $display("INFO: done asserted at time %0t", $time);
-            end
-
-        join_any
-        disable fork;
+        repeat(1) begin
+            rst_n = 0;
+            start = 0;
+            mismatch = 0;
+            repeat(5) @(posedge clk);
+            rst_n = 1;
+            repeat(2) @(posedge clk);
+            $display("INFO: Asserting start pulse");
+    //        start = 1;
+    //        @(posedge clk);
+    //        start = 0;
     
-//        wait (dut.ctrl.tx_begin == 1);
-        while(j!=output_size/8) begin
-            $display("--- Byte %d ---", j);
-            
-            @(negedge tx);      
-            #(BIT_TIME);
-            for (int b = 0; b < 8; b++) begin
-                #(BIT_TIME);
-                received_byte[b] = tx;
-            end
-            
-            #(BIT_TIME);
-            #(BIT_TIME);
-//            if (received_byte !== 8'hxx) begin
-                if (received_byte == expected_bytes[j]) begin
-                    $display("MATCH: %h == %h", received_byte, expected_bytes[j]);
-                end else begin
-                    $display("MISMATCH: %h != %h", received_byte, expected_bytes[j]);
-                    mismatch = 1;
+            // Wait for done with timeout
+            $display("INFO: Waiting for done...");
+            fork
+                begin
+                    wait(done == 1);
+                    $display("INFO: done asserted at time %0t", $time);
                 end
-                j = j + 1;
-//            end
-            
-
+    
+            join_any
+            disable fork;
+            j = 0;
+            while(j!=output_size/8) begin
+                $display("--- Byte %d ---", j);
+                
+                @(negedge tx);      
+                #(BIT_TIME);
+                for (int b = 0; b < 8; b++) begin
+                    #(BIT_TIME);
+                    received_byte[b] = tx;
+                end
+                
+                #(BIT_TIME);
+                #(BIT_TIME);
+    //            if (received_byte !== 8'hxx) begin
+                    if (received_byte == expected_bytes[j]) begin
+                        $display("MATCH: %h == %h", received_byte, expected_bytes[j]);
+                    end else begin
+                        $display("MISMATCH: %h != %h", received_byte, expected_bytes[j]);
+                        mismatch = 1;
+                    end
+                    j = j + 1;
+    //            end
+                
+            end
+            $display("\n");
+    
+            if (mismatch) $display("FAILURE: Digest mismatch");
+            else          $display("SUCCESS: All %0d bytes match", total_expected_bytes);
+    
+            $display("Completed in %0d clock cycles", cycle_ctr);
+            $fwrite(csv_fd, "%0d,%0d\n", cycle_ctr, !mismatch);
         end
-        $display("\n");
-
-        if (mismatch) $display("FAILURE: Digest mismatch");
-        else          $display("SUCCESS: All %0d bytes match", total_expected_bytes);
-
-        $display("Completed in %0d clock cycles", cycle_ctr);
-        $fwrite(csv_fd, "%0d,%0d\n", cycle_ctr, !mismatch);
+        wait(tr_end);
         $finish;
     end
     
