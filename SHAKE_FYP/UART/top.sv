@@ -1,11 +1,10 @@
 module top #(
     parameter clkdiv = 868,
-    parameter OUTPUT_BUFFER_DEPTH_WORDS = 131072
+    parameter BRAM_DEPTH = 256,
+    parameter OUTPUT_BUFFER_DEPTH_WORDS = 256
 )(
     input  logic clk,
     input  logic rst_n,
-    input  logic start,
-    
     output logic tr_start,
     output logic tr_end,
     output logic tx
@@ -19,13 +18,11 @@ module top #(
     logic [7:0] tx_data;
     logic [$clog2(OUTPUT_BUFFER_DEPTH_WORDS * (w/8))-1:0] rd_addr;
 
- shake_top #(.OUTPUT_BUFFER_DEPTH_WORDS(OUTPUT_BUFFER_DEPTH_WORDS))
+ shake_top #(.OUTPUT_BUFFER_DEPTH_WORDS(OUTPUT_BUFFER_DEPTH_WORDS), .BRAM_DEPTH(BRAM_DEPTH))
     shake (
     .clk(clk),
     .rst_n(rst_n),
-    .start(start),
     .done(tr_start),
-
     .buffer_dout_byte(rd_data),
     .buffer_read_en(rd_en),
     .buffer_read_addr(rd_addr)
