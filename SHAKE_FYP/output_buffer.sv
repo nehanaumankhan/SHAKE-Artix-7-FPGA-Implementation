@@ -16,6 +16,7 @@ module output_buffer #(
     input  logic                     re,
     input  logic [$clog2(DEPTH_WORDS * (DATA_WIDTH/BYTE_WIDTH))-1:0] raddr,  // byte address
     output logic [BYTE_WIDTH-1:0]    dout
+    
 );
 
     localparam BYTES_PER_WORD = DATA_WIDTH / BYTE_WIDTH;
@@ -43,21 +44,6 @@ module output_buffer #(
          end
     end
 
-    // Read word from memory (address = raddr / BYTES_PER_WORD)
-//    assign word_addr = raddr >> $clog2(BYTES_PER_WORD);
-//    assign byte_offset = raddr[$clog2(BYTES_PER_WORD)-1:0];
-//    assign read_word = mem[word_addr];
-
-//    always_ff @(posedge clk) begin
-//        if (re) begin
-//            read_word <= mem[word_addr];
-//            word_addr <= raddr >> $clog2(BYTES_PER_WORD);
-//            hold <= raddr;
-//        end
-//        byte_offset <= hold[$clog2(BYTES_PER_WORD)-1:0];
-//        // Output the requested byte (LSB first)
-//        dout <= read_word[byte_offset*BYTE_WIDTH +: BYTE_WIDTH];
-//    end
     always_ff @(posedge clk) begin
         if (re) begin
             word_addr = raddr >> $clog2(BYTES_PER_WORD);
