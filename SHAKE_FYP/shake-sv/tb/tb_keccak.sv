@@ -1,183 +1,201 @@
+`timescale 1ns / 1ps
+
 import keccak_pkg::*;
 
-module tb;
-    // Constants
-    localparam integer P = 10;
-    localparam MAX_TV_SIZE = 2;
-    localparam MAX_DIGEST_SIZE = 8 * 1024 * 1024;
-    localparam MAX_MESSAGE_SIZE = 8 * 1024 * 1024;
-    localparam BRAM_DEPTH = 1024;
-    localparam OUTPUT_BUFFER_DEPTH_WORDS = 131072;  // must match shake_top parameter
+module tb_top;
+    localparam integer P       = 10;
+    localparam MAX_TV_SIZE     = 12 ;
+    localparam MAX_DIGEST_SIZE = 8*1024*1024;   
+    localparam MAX_MSG_SIZE    = 8*1024*1024;
 
-    localparam string TV_PATH = "C://Users//LENOVO//shake-sv//tb";
-    localparam string RESULTS_DIR ="C://Users//LENOVO//shake-sv//tb//results";
-    localparam TV = 1;
-    
-    string file_name;
+    localparam string TV_PATH  = "C://Users//LENOVO//SHAKE//SHAKE.srcs//sim_1//new//kat//";
+    integer TV              = 0 ;
+
+    string f;
     integer csv_fd;
+    logic done   = 0;
     logic failed = 0;
-    logic [63:0] curr;
+    logic clk    = 1;
+    logic rst;
+    logic valid_i, ready_o;
+    logic valid_o, ready_i;
+    logic [w-1:0] data_i, data_o;
 
-    logic clk = 1;
-    logic rst_n;
-    logic start;
-    logic done;
-
-    // Output buffer read interface (byte-wide)
-    logic [7:0] buffer_dout_byte;
-    logic       buffer_read_en;
-    logic [$clog2(OUTPUT_BUFFER_DEPTH_WORDS * (w/8))-1:0] buffer_read_addr;
-
-    // Test vector arrays
     logic [w-1:0] config_words [0:MAX_TV_SIZE-1];
-    logic [MAX_MESSAGE_SIZE-1:0] messages [0:MAX_TV_SIZE-1];
-    logic [0:MAX_DIGEST_SIZE-1] digests [0:MAX_TV_SIZE-1];
+    logic [MAX_MSG_SIZE-1:0] messages [0:MAX_TV_SIZE-1]; // message comes in MSB first
+    logic [MAX_MSG_SIZE-1:0] digests  [0:MAX_TV_SIZE-1]; 
     logic [31:0] input_size;
     logic [31:0] output_size;
 
-    // Expected digest bytes
-    logic [7:0] expected_bytes [0:MAX_DIGEST_SIZE/8 - 1];
-    int total_expected_bytes;
-    int total_words;
-    logic mismatch;
+    typedef enum logic [3:0] {
+        S_INIT, S_EXECUTE, S_STOP, S_RST
+    } state_t;
+    state_t state = S_RST;
 
-    // Cycle counter
-    longint unsigned cycle_ctr = 0;
-    logic started = 0;
 
-    // Instantiate shake_top
-    shake_top #(
-        .BRAM_DEPTH(BRAM_DEPTH),
-        .OUTPUT_BUFFER_DEPTH_WORDS(OUTPUT_BUFFER_DEPTH_WORDS)
-    ) dut (
-        .clk,
-        .rst_n,
-        .start,
-        .done,
-        .buffer_dout_byte,
-        .buffer_read_en,
-        .buffer_read_addr
-    );
-
-    // Clock
-    always #(P/2) clk = ~clk;
-
-    // Cycle counter
-    always_ff @(posedge clk) begin
-        if (rst_n == 0) begin
-            cycle_ctr <= 0;
-            started <= 0;
-        end else if (start) begin
-            started <= 1;
-        end else if (done) begin
-            started <= 0;
-        end else if (started) begin
-            cycle_ctr <= cycle_ctr + 1;
-        end
-    end
-
-    // Main initial block
     initial begin
         // Read test vectors
         $readmemh({TV_PATH, "config_word.txt"}, config_words);
         $readmemh({TV_PATH, "message.txt"}, messages);
         $readmemh({TV_PATH, "digest.txt"}, digests);
 
-        input_size  = config_words[TV][31:0];
-        output_size = {4'b0, config_words[TV][59:32]};
-        total_expected_bytes = output_size / 8;
-        total_words = output_size / 64;
-        $display("INFO: input_size = %0d bits, output_size = %0d bits", input_size, output_size);
-        $display("INFO: total_expected_bytes = %0d", total_expected_bytes);
-
-//        // Convert packed digest vector to byte array (LSB first)
-//        for (int i = 0; i < total_words; i++) begin
-//            curr = digests[TV][i*64 +: 64];
-//            for (int j = 0; j < 8; j++)
-//                expected_bytes[8*i + j] = curr[j*8 +: 8 ];
-//            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);
-                
-//        end
-        for (int i =  0; i < total_expected_bytes; i++) begin
-//            curr = digests[TV][i*64 +: 64];
-            expected_bytes[i] = digests[TV][MAX_DIGEST_SIZE - total_expected_bytes*8 + i*8 +: 8];
-//            $display("%h", digests[TV][i*8 +: 8]);
-            
-//            $display("curr : %h, eb %h",curr, expected_bytes[8*i +: 8]);           
-        end
-
-        // Open CSV
-        file_name = "keccak.csv";
-        csv_fd = $fopen({RESULTS_DIR, file_name}, "w");
-        if (!csv_fd) $fatal(1, "Failed to open CSV file");
-        $fwrite(csv_fd, "total_cycles,success\n");
-
-        // Initialize input buffer (hierarchical path)
-        $display("INFO: Initializing input buffer...");
-        for (int i = 0; i < BRAM_DEPTH; i++) dut.bram_inst.mem[i] = '0;
-        dut.bram_inst.mem[0] = config_words[TV];
-        for (int i = 0; i < (input_size + w - 1) / w; i++) begin
-            dut.bram_inst.mem[1 + i] = messages[TV][i*w +: w];
-        end
-        $display("INFO: Input buffer initialized with config and %0d message words", (input_size + w - 1) / w);
-
-        // Reset and start
-        rst_n = 0;
-        start = 0;
-        buffer_read_en = 0;
-        buffer_read_addr = 0;
-        mismatch = 0;
-
-        repeat(5) @(posedge clk);
-        rst_n = 1;
-        repeat(2) @(posedge clk);
-        $display("INFO: Asserting start pulse");
-        start = 1;
-        @(posedge clk);
-        start = 0;
-
-        // Wait for done with timeout
-        $display("INFO: Waiting for done...");
-        fork
-            begin
-                wait(done == 1);
-                $display("INFO: done asserted at time %0t", $time);
-            end
-//            begin
-//                repeat(2000000) @(posedge clk);
-//                $display("ERROR: Timeout waiting for done");
-//                $finish;
-//            end
-        join_any
-        disable fork;
-
-        // Read output buffer byte by byte and compare
-//        buffer_read_addr = 0;
-//        buffer_read_en = 1;
-        @(posedge clk);
-        $display("INFO: Reading output buffer...");
-        for (int i = 0; i < total_expected_bytes; i++) begin
-            buffer_read_addr = i;
-            buffer_read_en = 1;
-            @(posedge clk);
-//            buffer_read_en = 0;
-//            @(posedge clk);
-            if (buffer_dout_byte !== expected_bytes[i]) begin
-                $display("ERROR: Byte %0d: expected %h, got %h", i, expected_bytes[i], buffer_dout_byte);
-                mismatch = 1;
-            end else begin
-                $write("%h ", buffer_dout_byte);
-                if ((i+1) % 16 == 0) $write("\n");
-            end
-        end 
-        $display("\n");
-
-        // Final verdict
-        if (mismatch) $display("FAILURE: Digest mismatch");
-        else          $display("SUCCESS: All %0d bytes match", total_expected_bytes);
-
-        $display("Completed in %0d clock cycles", cycle_ctr);
-        $fwrite(csv_fd, "%0d,%0d\n", cycle_ctr, !mismatch);
-        $finish;
     end
+
+    // Clock definition
+    always #(P/2) clk = ~clk;
+
+    // Some constant signals
+    assign output_size = {4'b0, config_words[TV][59:32]};
+    assign input_size = config_words[TV][31:0];
+
+    // Cycle counter
+    longint unsigned cycle_ctr;
+    always_ff @(posedge clk) begin
+        if (rst)
+            cycle_ctr <= 0;
+        else if (state != S_STOP)
+            cycle_ctr <= cycle_ctr + 1;
+    end
+
+    // Input word counter
+    longint unsigned input_ctr;
+    always_ff @(posedge clk) begin
+        if (rst)
+            input_ctr <= (input_size >> 6) + (input_size[5:0] != 0);
+        else if ((state == S_EXECUTE) && valid_i && ready_i)
+            if (input_ctr > 1) input_ctr <= input_ctr - 1;
+//            else input_ctr <= 1;
+    end
+
+    // Output word counter
+    longint unsigned output_ctr;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            output_ctr <= output_size;
+//            $display("Output Counter: %d", output_ctr);
+        end
+        else if ((state == S_EXECUTE) && valid_o && ready_o)
+            output_ctr <= output_ctr - 64;
+    end
+
+    // Device under stress
+    keccak dut (
+        .clk (clk),
+        .rst (rst),
+        .ready_o (ready_o),
+        .valid_i (valid_i),
+        .ready_i (ready_i),
+        .valid_o (valid_o),
+        .data_i (data_i),
+        .data_o (data_o)
+    );
+
+//    initial begin
+//        $display("Testbench started");
+//        rst = 1;
+//        #(2*P);
+//        rst = 0;
+//    end
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            valid_i             <= 0;
+            ready_o             <= 0;
+            data_i              <= 0;
+            failed              <= 0;
+            state               <= S_INIT;
+            rst <= 0;
+        end
+   
+        else begin
+//            valid_i <= 0;
+            ready_o <= 0;
+            data_i  <= 0;
+//            rst <= 0;
+
+            unique case (state)
+                S_RST:  begin
+                    rst <= 1;
+                end
+                S_INIT: begin
+                    valid_i <= 1;
+                    data_i  <= config_words[TV][w-1:0];
+//                    rst <= 0;
+                    if (ready_i) begin
+                        valid_i <= 1;
+                        state  <= S_EXECUTE;
+                        data_i <= messages[TV][(input_ctr-1)*w +: w];
+                    end
+                end
+
+                S_EXECUTE: begin               
+                    ready_o <= 1;
+                    data_i  <= messages[TV][(input_ctr-1)*w +: w];
+//                    $display("valid_i = %d, ready_i = %d output_ctr = %d", valid_i, ready_i, output_ctr);
+
+                    if (ready_i && valid_i) begin
+                        if (input_ctr == 1) begin
+                            valid_i <= 0;
+                        end
+//                        $display("valid_i = %d, ready_i = %d, data_i = %h, input_ctr = %d, msg = %h", valid_i, ready_i, data_i, input_ctr, messages[TV][(input_ctr-1)*w +: w]);
+//                        $display("output_size = %d, input_size = %d, data_i = %h, input_ctr = %d", output_size, input_size, data_i, input_ctr);
+                        data_i <= messages[TV][(input_ctr-2)*w +: w];
+                    end
+
+                    if (valid_o && (data_o != digests[TV][(output_ctr-64)+:w])) begin
+                        $display("Error in word %d: Expected %h, received %h", output_ctr, digests[TV][(output_ctr-64)+:w], data_o);
+                        $display("digest: %h", digests[0][31:0]);
+                        state <= S_STOP;
+//                         $display("output_ctr: %d", digests[TV]);
+                        failed <= 1;
+                    end
+
+                    if (output_ctr <= 64) begin
+                        state  <= S_STOP;
+                    end
+                end
+
+                S_STOP: begin
+                    if (failed) begin
+                        $display("Test case %d: FAILURE", TV);
+                    end else begin
+                        $display("Test case %d: SUCCESS", TV);
+                    end
+                    if (TV + 1 < MAX_TV_SIZE) begin
+                        TV <= TV + 1;
+                        state <= S_RST;
+                        $display("Completed in %d clock cycles", cycle_ctr);
+                    end
+                    else begin
+                        $display("Completed in %d clock cycles", cycle_ctr);
+                        $finish;
+                       
+                    end  
+              
+                    
+                end
+            
+                default: begin
+                    $fatal(1, "Invalid state reached: %0d", state);
+                end
+            endcase
+        end
+    end
+
 endmodule
+
+
+//1. 40000b4000000020 - SHAKE128 with a 32-bit input and a 2880-bit output (plus bit 63 set).
+//2. 4080000000000020 - SHAKE128 with a 32-bit input and an extremely large 8,388,608-bit (8 Mb) output.
+//3. 4000100000000040 - SHAKE128 with a 64-bit input and a 4096-bit (512-byte) output.
+//4. 40000AF0000007D0 - SHAKE128 with a 2000-bit input and a 2800-bit output.
+//5. 60000AF0000007D0 - SHAKE256 with a 2000-bit input and a 2800-bit output (same lengths as above, switched to SHAKE256).
+//6. 60000AF000000800 - SHAKE256 with a 2048-bit (exact 256-byte) input and a 2800-bit output.
+//7. 4000010000000024 - SHAKE128 with a 36-bit input and a 256-bit (32-byte) output.
+//8. 4000020000000080 - SHAKE128 with a 128-bit (16-byte) seed/input and a 512-bit (64-byte) output.
+//9. 6000040000000100 - SHAKE256 with a 256-bit (32-byte) key/input and a 1024-bit (128-byte) output.
+//10. 4000080000000200 - SHAKE128 with a 512-bit (64-byte) block input and a 2048-bit (256-byte) output.
+//11. 60000C0000000400 - SHAKE256 with a 1024-bit (128-byte) message input and a 3072-bit (384-byte) output.
+//12. 4000020000001000 - SHAKE128 with a large 4096-bit (512-byte) message input and a compact 512-bit (64-byte) output.
+// message stored in memory or sent as multiple of 64 (padded with 0s) let's say msg size is 72 so it will be stored in 
+// memory as {first 64 bits, 8 bits, 56 0s} message_size 72
