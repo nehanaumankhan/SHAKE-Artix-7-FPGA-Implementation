@@ -2,15 +2,17 @@
 import keccak_pkg::*;
 
 module shake_top #(
-    parameter BRAM_DEPTH = 1024,
-    parameter OUTPUT_BUFFER_DEPTH_WORDS = 131072   // number of 64-bit words
+    parameter BRAM_DEPTH = 64,
+    parameter OUTPUT_BUFFER_DEPTH_WORDS = 64 //131072   // number of 64-bit words
 )(
     input  logic clk,
     input  logic rst_n,
 //    input  logic start,
     output logic done,
-
-    // Byte-wide read interface for output buffer
+    input logic in_buffer_wdone,
+    input logic in_buffer_we,   
+    input logic [$clog2(BRAM_DEPTH)-1:0] in_buffer_waddr,// Byte-wide read interface for output buffer
+    input logic [w-1:0] in_buffer_wdata,
     output logic [7:0] buffer_dout_byte,
     input  logic       buffer_read_en,
     input  logic [$clog2(OUTPUT_BUFFER_DEPTH_WORDS * (w/8))-1:0] buffer_read_addr
@@ -61,10 +63,13 @@ module shake_top #(
         .DATA_WIDTH(w),
         .DEPTH(BRAM_DEPTH)
     ) bram_inst (
-        .clk     (clk),
-        .read_en (bram_read_en),
-        .addr    (bram_addr),
-        .rdata   (bram_rdata)
+        .clk(clk),
+        .write_en(in_buffer_we),
+        .write_addr(in_buffer_waddr),
+        .write_data(in_buffer_wdata),
+        .read_en(bram_read_en),
+        .read_addr(bram_addr),
+        .read_data(bram_rdata)
     );
 
     // ------------------------------------------------------------------
@@ -91,6 +96,7 @@ module shake_top #(
     ) ctrl_inst (
         .clk          (clk),
         .rst          (rst),
+        .write_done(in_buffer_wdone),
         
 //        .start        (start),
         .done         (done),

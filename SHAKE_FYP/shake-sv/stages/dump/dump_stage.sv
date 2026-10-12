@@ -1,33 +1,33 @@
-`timescale 1ns / 1ps
+`timescale 1ns/1ps
 
 import keccak_pkg::*;
 
 module dump_stage (
-    // External inputs
-    input  logic clk,
-    input  logic rst,
-    input  logic ready_o,
+    input logic clk,
+    input logic rst,
+    input logic ready_o,
 
-    // Inputs from previous stage
-    input  logic[RATE_SHAKE128-1:0] rate_output,
-    input  logic[31:0] output_size,
-    input  logic[1:0] operation_mode,
-    input  logic output_buffer_we,
+    // Outputs from Permute Stage
+    input logic [1:0 ] operation_mode,
+    input logic [31:0] output_size,
+    input logic [RATE_SHAKE128-1:0] rate_output,
+    input logic output_buffer_we,
 
-    // Outputs for next stage
-    output logic[w-1:0] data_o,
-    output logic valid_o,
-
-    // Second stage pipeline handshaking
+    // Permute Stage Handshaking
     input  logic last_output_block,
     output logic last_output_block_clr,
-    output logic output_buffer_available_wr
+    output logic output_buffer_available_wr,
+
+    // External Outputs
+    output logic valid_o,
+    output logic [w-1:0] data_o
 );
-    logic output_buffer_shift_en;
     logic last_word_from_block;
-    logic output_counter_rst, output_counter_load;
-    logic valid_bytes_enable, valid_bytes_reset;
+    logic output_counter_load, output_counter_rst;
+    logic valid_bytes_enable, valid_bytes_rst;
     logic last_output_block_internal, output_buffer_we_internal;
+    logic output_buffer_shift_en;
+
 
     dump_fsm dump_stage_fsm (
         // External inputs
@@ -38,12 +38,12 @@ module dump_stage (
         .output_buffer_we_in         (output_buffer_we),
         .last_output_block_in        (last_output_block),
         // Status signals
-        .last_word_from_block         (last_word_from_block),
+        .last_word_from_block        (last_word_from_block),
         // Control signals
         .output_counter_load         (output_counter_load),
         .output_counter_rst          (output_counter_rst),
         .output_buffer_shift_en      (output_buffer_shift_en),
-        .valid_bytes_reset           (valid_bytes_reset),
+        .valid_bytes_reset           (valid_bytes_rst),
         .valid_bytes_enable          (valid_bytes_enable),
         .last_output_block_out       (last_output_block_internal),
         .output_buffer_we_out        (output_buffer_we_internal),
@@ -68,12 +68,12 @@ module dump_stage (
         .output_buffer_shift_en  (output_buffer_shift_en),
         .output_counter_load     (output_counter_load),
         .output_counter_rst      (output_counter_rst),
-        .valid_bytes_reset       (valid_bytes_reset),
+        .valid_bytes_reset       (valid_bytes_rst),
         .valid_bytes_enable      (valid_bytes_enable),
         // Status signals
         .last_word_from_block    (last_word_from_block),
         // External outputs
         .data_o                  (data_o)
     );
-
+    
 endmodule

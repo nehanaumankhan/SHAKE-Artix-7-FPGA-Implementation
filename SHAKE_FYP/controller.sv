@@ -1,13 +1,15 @@
 // controller.sv
 module controller #(
-    parameter BRAM_DEPTH      = 1024,
+    parameter BRAM_DEPTH      = 64,
     parameter BRAM_ADDR_WIDTH = $clog2(BRAM_DEPTH),
     parameter WORD_WIDTH      = 64
 )(
     input  logic clk,
     input  logic rst,
+    input logic write_done,
 //    input  logic start,
     output logic done,
+    
 //    output logic [7:0] out_last,
 
     // BRAM interface
@@ -60,7 +62,7 @@ module controller #(
         next_state = state;
         case (state)
             IDLE: begin
-                if (start)
+                if (write_done)
                     next_state = READ_CONFIG;
             end
             READ_CONFIG: begin
@@ -122,7 +124,7 @@ module controller #(
         end else begin
             // Default assignments
             bram_read_en <= 0;
-            valid_i <= 0;
+//            valid_i <= 0;
             ready_o <= 0;
 //            done <= 0;
             out_valid <= 0;
@@ -130,7 +132,7 @@ module controller #(
 
             case (state)
                 IDLE: begin
-                    if (start) begin
+                    if (write_done) begin
                         bram_addr <= 0;
                         bram_read_en <= 1;
                         state <= READ_CONFIG;
@@ -140,7 +142,7 @@ module controller #(
                         done <= 0;
                     end
                 end
-
+                              
                 READ_CONFIG: begin
                     state <= SEND_CONFIG;
                     start <= 0;
@@ -160,10 +162,11 @@ module controller #(
                         bram_addr <= 1;
                         bram_read_en <= 1;
                         state <= READ_MSG;
+                        valid_i <= 0;
                     end
                 end
 
-                READ_MSG: begin
+                READ_MSG: begin             
                     if (input_bits_sent < input_size_bits) begin
                         state <= SEND_MSG;
                     end else begin
@@ -175,9 +178,10 @@ module controller #(
                     valid_i <= 1;
                     data_i <= bram_rdata;
                     if (ready_i) begin
+                        valid_i <= 0;
                         input_bits_sent <= input_bits_sent + WORD_WIDTH;
                         if (input_bits_sent + WORD_WIDTH >= input_size_bits) begin
-                            state <= COLLECT;
+                            state <= COLLECT;    
                         end else begin
                             bram_addr <= bram_addr + 1;
                             bram_read_en <= 1;

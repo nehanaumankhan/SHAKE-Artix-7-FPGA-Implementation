@@ -1,6 +1,6 @@
 // output_buffer.sv
 module output_buffer #(
-    parameter DEPTH_WORDS = 131072,   // number of 64-bit words
+    parameter DEPTH_WORDS = 64,   // number of 64-bit words
     parameter DATA_WIDTH = 64,        // write width (must match w)
     parameter BYTE_WIDTH = 8
 )(
