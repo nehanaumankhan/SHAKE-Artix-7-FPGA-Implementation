@@ -1,6 +1,6 @@
 import keccak_pkg::*;
 
-module shake_top_tb;
+module tb;
     // Constants
     localparam integer P = 10;
     localparam MAX_TV_SIZE = 2;
@@ -9,8 +9,8 @@ module shake_top_tb;
     localparam BRAM_DEPTH = 1024;
     localparam OUTPUT_BUFFER_DEPTH_WORDS = 131072;  // must match shake_top parameter
 
-    localparam string TV_PATH = "C://FYP//SHAKE//shake-sv//tb//kat//";
-    localparam string RESULTS_DIR = "C://FYP//SHAKE//shake-sv//tb//results";
+    localparam string TV_PATH = "C://Users//LENOVO//shake-sv//tb";
+    localparam string RESULTS_DIR ="C://Users//LENOVO//shake-sv//tb//results";
     localparam TV = 1;
     
     string file_name;
